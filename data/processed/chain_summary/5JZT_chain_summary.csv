@@ -1,0 +1,8 @@
+﻿pdb_id,nanopore_id,model_index,chain_id,total_residue_count,standard_residue_count,nonstandard_residue_count,atom_count,ca_missing_count,first_residue_number,last_residue_number
+5JZT,aerolysin_WT,0,A,423,423,0,3329,0,2,424
+5JZT,aerolysin_WT,0,B,423,423,0,3329,0,2,424
+5JZT,aerolysin_WT,0,C,423,423,0,3329,0,2,424
+5JZT,aerolysin_WT,0,D,423,423,0,3329,0,2,424
+5JZT,aerolysin_WT,0,E,423,423,0,3329,0,2,424
+5JZT,aerolysin_WT,0,F,423,423,0,3329,0,2,424
+5JZT,aerolysin_WT,0,G,423,423,0,3329,0,2,424
