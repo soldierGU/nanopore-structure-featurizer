@@ -111,4 +111,4 @@ if __name__ == "__main__":
     main()
 
 # 使用示例 当前工程下terminal或者powershell运行run_pipeline.py --config config/9FM6.yaml
-# 其中9FM6为纳米孔Pdb编号，运行时请将9FM6替换为对应编号
+# 其中9FM6为纳米孔Pdb编号，运行时请将9FM6替换为对应编号 
