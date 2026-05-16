@@ -3,11 +3,16 @@ project:
   version: 0.1.0
 
 input:
-  pdb_id: 5JZT
-  nanopore_id: aerolysin_WT
-  structure_file: data/raw/5JZT/5JZT_assembly.cif
-  file_format: cif
-  assembly_type: biological_assembly
+  pdb_id: 5JZT_T232K
+  nanopore_id: aerolysin_T232K
+  structure_file: data/modeled/5JZT_T232K/5JZT_T232K_model.pdb
+  file_format: pdb
+  assembly_type: modeled_biological_assembly
+  structure_source_type: template_based_mutant_model
+  template_pdb_id: 5JZT
+  modeling_method: FoldX
+  mutation_list:
+    - T232K
 
 structure:
   use_model_index: 0

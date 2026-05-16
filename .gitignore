@@ -18,6 +18,8 @@ env/
 
 # Logs
 *.log
-
+# External licensed tools
+tools/foldx/
 # Optional large outputs
 outputs/logs/
+
