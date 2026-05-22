@@ -1,151 +1,107 @@
-## Nanopore Structure Featurizer
+# Nanopore Structure Featurizer
 
-`nanopore-structure-featurizer` 是一个面向蛋白纳米孔结构的特征提取工程。
-当前版本以 `PDB/mmCIF` 结构文件为输入，围绕孔道几何中心和残基理化属性，生成：
+`nanopore-structure-featurizer` 用于从蛋白纳米孔三维结构中提取可分析、可建模的结构特征。
 
-- chain-level 结构摘要
-- residue-level 特征表
-- 候选孔道内壁残基表
-- nanopore-level 聚合结构特征表
+工程当前支持两类输入：
 
-工程当前已经包含一个示例输入：`5JZT` biological assembly。
+1. WT 结构：`PDB/mmCIF`
+2. 基于 FoldX 建模得到的 mutant 结构：`PDB`
 
-## 当前流程
+当前仓库已经验证过以下场景：
 
-主入口是 [scripts/run_pipeline.py](scripts/run_pipeline.py)。
+- WT: `5JZT`
+- 单突变: `T232K`
+- 双突变: `T232K/K238Q`
 
-完整流程包含 4 个步骤：
+同样的流程也可以用于新的单点突变，例如 `T274S`。
 
-1. 解析结构并生成链级统计表
-2. 提取标准氨基酸残基的基础特征
-3. 根据径向距离阈值筛选候选孔道内壁残基
-4. 聚合得到 nanopore-level 结构特征
+## 1. 工程做什么
 
-当前筛选逻辑是一个几何近似版本，核心规则为：
+对于一个纳米孔结构，工程会依次生成：
 
-`radial_distance <= inner_radius_threshold`
+1. chain-level summary
+2. residue-level features
+3. candidate inner residues
+4. nanopore-level structure features
+5. WT-mutant delta features
 
-这适合先完成可运行的数据流程，但它不等同于专业孔道识别工具给出的严格 pore-lining residue 定义。
+主流程如下：
 
-## 目录结构
+```text
+PDB/mmCIF / modeled PDB
+        |
+chain summary
+        |
+residue features
+        |
+candidate inner residues
+        |
+nanopore-level features
+        |
+WT-mutant delta features
+```
+
+## 2. 目录结构
 
 ```text
 nanopore-structure-featurizer/
 ├─ config/
-│  ├─ default.yaml
-│  └─ nanopores.yaml
 ├─ data/
 │  ├─ raw/
+│  ├─ foldx/
+│  │  ├─ input/
+│  │  └─ mutants/
+│  ├─ modeled/
 │  └─ processed/
 ├─ outputs/
-│  └─ figures/
 ├─ scripts/
-│  ├─ 00_check_config.py
-│  ├─ 01_parse_structure.py
-│  ├─ 02_extract_residue_features.py
-│  ├─ 03_select_inner_residues.py
-│  ├─ 04_build_nanopore_features.py
-│  ├─ 05_threshold_sensitivity.py
-│  ├─ 06_visualize_inner_residues.py
-│  └─ run_pipeline.py
-├─ src/
-│  └─ npstructfeat/
-│     ├─ io.py
-│     ├─ parser.py
-│     ├─ features.py
-│     ├─ geometry.py
-│     ├─ pore.py
-│     ├─ residue_props.py
-│     └─ utils.py
-├─ tests/
-├─ requirements.txt
-└─ README.md
+└─ src/npstructfeat/
 ```
 
-## 环境依赖
-
-依赖见 [requirements.txt](requirements.txt)：
-
-- `biopython`
-- `pandas`
-- `numpy`
-- `pyyaml`
-- `matplotlib`
-
-建议使用 Python 3.10+。
+## 3. 依赖与运行环境
 
 安装依赖：
 
-```bash
+```powershell
 pip install -r requirements.txt
 ```
 
-## 输入数据
+建议使用 Python 3.10+。
 
-默认配置文件是 [config/default.yaml](config/default.yaml)。
+由于工程采用 `src/` 布局，在 Windows PowerShell 下建议先执行：
 
-当前默认输入：
-
-- `pdb_id`: `5JZT`
-- `nanopore_id`: `aerolysin_WT`
-- `structure_file`: `data/raw/5JZT/5JZT_assembly.cif`
-- `file_format`: `cif`
-- `assembly_type`: `biological_assembly`
-
-## 配置说明
-
-`config/default.yaml` 主要包含以下配置段：
-
-### `project`
-
-- `name`
-- `version`
-
-### `input`
-
-- `pdb_id`
-- `nanopore_id`
-- `structure_file`
-- `file_format`
-- `assembly_type`
-
-### `structure`
-
-- `use_model_index`: 选择第几个 model，默认 `0`
-- `use_standard_residues_only`: 是否只保留标准氨基酸
-- `use_ca_only`: 是否只保留含 `CA` 原子的残基
-
-### `pore`
-
-- `axis_mode`: 当前版本仅支持 `z_axis`
-- `center_mode`: 当前支持 `xy_mean` 和 `xy_median`
-- `inner_radius_threshold`: 候选孔道内壁筛选阈值，单位 Å
-
-### `output`
-
-定义中间结果和处理结果的输出目录。
-
-### `save`
-
-控制是否保存各阶段结果。
-
-## 运行方式
-
-### 运行完整流程
-
-```bash
-python scripts/run_pipeline.py
+```powershell
+cd E:\nanopore-structure-featurizer
+chcp 65001
+$env:PYTHONPATH="src"
 ```
 
-或显式指定配置文件：
+## 4. 当前配置文件
 
-```bash
+### 4.1 WT 默认配置
+
+`config/default.yaml`
+
+用于 WT `5JZT` biological assembly。
+
+### 4.2 已有 mutant 配置
+
+- `config/5JZT_T232K_foldx.yaml`
+- `config/5JZT_T232K_K238Q_foldx.yaml`
+
+这类配置用于 FoldX 建模后的 mutant PDB，再跑后续特征提取流程。
+
+## 5. 基础用法
+
+### 5.1 运行 WT 全流程
+
+```powershell
 python scripts/run_pipeline.py --config config/default.yaml
 ```
 
-### 按步骤运行
+如果你想逐步执行：
 
-```bash
+```powershell
 python scripts/00_check_config.py
 python scripts/01_parse_structure.py
 python scripts/02_extract_residue_features.py
@@ -153,108 +109,369 @@ python scripts/03_select_inner_residues.py
 python scripts/04_build_nanopore_features.py
 ```
 
-### 分析和可视化脚本
+### 5.2 运行分析和可视化
 
-```bash
+```powershell
 python scripts/05_threshold_sensitivity.py
 python scripts/06_visualize_inner_residues.py
 ```
 
-## 输出文件
+## 6. 这份工程是否兼容新的突变
 
-基于当前默认配置，工程会在 `data/processed/` 下生成：
+兼容。
 
-### 1. chain summary
+### 6.1 新的单点突变
 
-路径示例：
+例如：
 
-`data/processed/chain_summary/5JZT_chain_summary.csv`
+- `T274S`
+- `K238Q`
+- `R220A`
 
-包含：
+当前工程已经支持新的单点突变，不需要为单点突变再改 Python 代码。
 
-- `chain_id`
-- `total_residue_count`
-- `standard_residue_count`
-- `nonstandard_residue_count`
-- `atom_count`
-- `ca_missing_count`
-- `first_residue_number`
-- `last_residue_number`
+### 6.2 新的多点突变
 
-### 2. residue features
+例如：
 
-路径示例：
+- `T232K/K238Q`
+- `T274S/K238Q`
 
-`data/processed/residue_features/5JZT_residue_features.csv`
+当前工程已经支持把多点突变字符串拆分后传给：
 
-包含：
+- `07_check_mutation_site.py`
+- `09_run_foldx_buildmodel.py`
 
+同时也支持为多突变生成规范化文件名和目录名，例如：
+
+```text
+T232K/K238Q -> T232K_K238Q
+```
+
+## 7. 新突变的标准执行流程
+
+下面这套流程适用于：
+
+- 新的单点突变，例如 `T274S`
+- 新的多点突变，例如 `T232K/K238Q`
+
+### 第 1 步：检查 WT 结构中的突变位点
+
+先确认 WT 结构里目标位点存在，而且残基编号和残基类型都匹配。
+
+#### 单点突变示例：`T274S`
+
+```powershell
+python scripts/07_check_mutation_site.py --config config/default.yaml --mutation T274S
+```
+
+#### 多点突变示例：`T232K/K238Q`
+
+```powershell
+python scripts/07_check_mutation_site.py --config config/default.yaml --mutation T232K/K238Q
+```
+
+输出结果保存在：
+
+```text
+data/processed/mutation_sites/
+```
+
+你应该重点检查这些字段：
+
+- `mutation_id`
 - `chain_id`
 - `residue_number`
-- `insertion_code`
-- `residue_name`
-- `x`, `y`, `z`
-- `has_ca`
-- `charge`
-- `hydrophobicity`
-- `is_aromatic`
-- `is_polar`
-
-### 3. inner candidate residues
-
-路径示例：
-
-`data/processed/inner_residues/5JZT_inner_candidate_residues.csv`
-
-在 residue-level 特征基础上增加：
-
-- `center_x`
-- `center_y`
-- `radial_distance`
-- `theta_rad`
-- `theta_deg`
-- `z_norm`
+- `expected_residue`
+- `observed_residue`
+- `is_site_found`
+- `is_expected_match`
 - `is_inner_candidate`
 
-### 4. nanopore structure features
+只有当位点检查通过后，才建议继续做 FoldX 建模。
 
-路径示例：
+### 第 2 步：准备 FoldX 输入 PDB
 
-`data/processed/nanopore_features/5JZT_nanopore_structure_features.csv`
+```powershell
+python scripts/08_prepare_foldx_input.py --config config/default.yaml --mutation T274S --chains A B C D E F G
+```
 
-包含聚合后的孔道级特征，例如：
+或者：
 
-- 候选内壁残基数量与比例
-- 每条链的候选残基数量统计
-- `z` 方向覆盖范围
-- 径向距离统计
-- 净电荷与平均电荷
-- 平均疏水性
-- 芳香族和极性残基占比
-- 候选残基类型数
+```powershell
+python scripts/08_prepare_foldx_input.py --config config/default.yaml --mutation T232K/K238Q --chains A B C D E F G
+```
 
-## 核心模块
+这一步会生成：
 
-- [src/npstructfeat/io.py](src/npstructfeat/io.py): 配置读取、路径解析、输出目录准备
-- [src/npstructfeat/parser.py](src/npstructfeat/parser.py): 结构加载、标准残基判断、链级摘要
-- [src/npstructfeat/features.py](src/npstructfeat/features.py): 残基级特征提取与 nanopore-level 聚合
-- [src/npstructfeat/geometry.py](src/npstructfeat/geometry.py): 几何中心、径向距离、角度、z 归一化
-- [src/npstructfeat/pore.py](src/npstructfeat/pore.py): 候选孔道内壁残基筛选
-- [src/npstructfeat/residue_props.py](src/npstructfeat/residue_props.py): 氨基酸理化属性定义
+```text
+data/foldx/input/5JZT_WT/5JZT_assembly.pdb
+```
 
-## 当前假设与限制
+以及 FoldX 输入准备报告。
 
-当前版本依赖以下假设：
+### 第 3 步：运行 FoldX RepairPDB
 
-- 结构已经基本沿 `z` 轴对齐
-- 孔道中心可以用所有残基 `CA` 坐标在 `x-y` 平面上的均值或中位数近似
-- 候选孔道内壁残基可通过径向距离阈值粗筛
-- 默认关注标准氨基酸残基
+进入 WT FoldX 输入目录：
 
-因此，这一版更适合：
+```powershell
+cd E:\nanopore-structure-featurizer\data\foldx\input\5JZT_WT
+```
 
-- 建立可复用的数据处理流程
-- 快速生成结构特征表
-- 做阈值敏感性分析和初步探索
+运行：
 
-如果后续需要更严格的孔道识别，可以考虑引入更稳健的主轴估计方法或外部专业工具结果。
+```powershell
+E:\nanopore-structure-featurizer\tools\foldx\foldx_1_20270131.exe --command=RepairPDB --pdb=5JZT_assembly.pdb
+```
+
+会生成：
+
+```text
+data/foldx/input/5JZT_WT/5JZT_assembly_Repair.pdb
+```
+
+#### 什么时候可以复用已有的 `5JZT_assembly_Repair.pdb`
+
+如果下面这件事没有变，就可以直接复用，不必重复跑：
+
+- `data/foldx/input/5JZT_WT/5JZT_assembly.pdb` 的内容没有被重新生成或手工修改过
+
+换句话说，**只要 WT FoldX 输入 PDB 还是同一个文件内容，已有的 `RepairPDB` 结果就可以继续用。**
+
+### 第 4 步：先准备 BuildModel 工作目录
+
+建议先准备工作目录和 `individual_list.txt`，不要直接运行 FoldX：
+
+#### 单点突变示例：`T274S`
+
+```powershell
+cd E:\nanopore-structure-featurizer
+$env:PYTHONPATH="src"
+python scripts/09_run_foldx_buildmodel.py --config config/default.yaml --mutation T274S --chains A B C D E F G --prepare-only --overwrite-individual-list
+```
+
+#### 多点突变示例：`T232K/K238Q`
+
+```powershell
+cd E:\nanopore-structure-featurizer
+$env:PYTHONPATH="src"
+python scripts/09_run_foldx_buildmodel.py --config config/default.yaml --mutation T232K/K238Q --chains A B C D E F G --prepare-only --overwrite-individual-list
+```
+
+这一步会生成：
+
+```text
+data/foldx/mutants/<PDB_ID>_<MUTATION_LABEL>/individual_list.txt
+```
+
+你应该先检查 `individual_list.txt` 内容是否符合预期。
+
+#### 单点示例 `T274S`
+
+```text
+TA274S,TB274S,TC274S,TD274S,TE274S,TF274S,TG274S;
+```
+
+#### 多点示例 `T232K/K238Q`
+
+```text
+TA232K,TB232K,TC232K,TD232K,TE232K,TF232K,TG232K,KA238Q,KB238Q,KC238Q,KD238Q,KE238Q,KF238Q,KG238Q;
+```
+
+### 第 5 步：正式运行 FoldX BuildModel
+
+确认 `individual_list.txt` 没问题后执行：
+
+#### 单点突变 `T274S`
+
+```powershell
+python scripts/09_run_foldx_buildmodel.py --config config/default.yaml --mutation T274S --chains A B C D E F G
+```
+
+#### 多点突变 `T232K/K238Q`
+
+```powershell
+python scripts/09_run_foldx_buildmodel.py --config config/default.yaml --mutation T232K/K238Q --chains A B C D E F G
+```
+
+这一步会：
+
+1. 调用 FoldX `BuildModel`
+2. 收集 mutant PDB
+3. 验证每条链上目标位点是否真的变成目标残基
+
+输出主要位于：
+
+```text
+data/foldx/mutants/
+data/modeled/
+```
+
+### 第 6 步：为新的 mutant 新建 YAML 配置
+
+每做出一个新的 mutant，都建议新建一个独立 YAML。
+
+原因：
+
+1. mutant PDB 是新的输入结构
+2. 需要单独的 `pdb_id`
+3. 需要单独的 `nanopore_id`
+4. 需要把 `structure_file` 指向新的 modeled PDB
+
+#### 单点突变 `T274S` 的 YAML 应该怎么写
+
+建议新建：
+
+```text
+config/5JZT_T274S_foldx.yaml
+```
+
+关键字段示例：
+
+```yaml
+input:
+  pdb_id: 5JZT_T274S
+  nanopore_id: aerolysin_T274S
+  structure_file: data/modeled/5JZT_T274S/5JZT_T274S_model.pdb
+  file_format: pdb
+  assembly_type: modeled_biological_assembly
+  structure_source_type: template_based_mutant_model
+  template_pdb_id: 5JZT
+  modeling_method: FoldX
+  mutation_list:
+    - T274S
+```
+
+#### 多点突变 `T232K/K238Q` 的 YAML
+
+本仓库已提供：
+
+```text
+config/5JZT_T232K_K238Q_foldx.yaml
+```
+
+### 第 7 步：对 mutant 重新跑结构特征提取流程
+
+#### 单点突变 `T274S`
+
+```powershell
+python scripts/run_pipeline.py --config config/5JZT_T274S_foldx.yaml
+```
+
+#### 多点突变 `T232K/K238Q`
+
+```powershell
+python scripts/run_pipeline.py --config config/5JZT_T232K_K238Q_foldx.yaml
+```
+
+这一步会生成 mutant 自己的：
+
+- chain summary
+- residue features
+- inner candidate residues
+- nanopore features
+
+### 第 8 步：比较 WT 和 mutant
+
+#### 单点突变 `T274S`
+
+```powershell
+python scripts/10_compare_wt_mutant_features.py --wt-feature data/processed/nanopore_features/5JZT_nanopore_structure_features.csv --mutant-feature data/processed/nanopore_features/5JZT_T274S_nanopore_structure_features.csv --wt-id aerolysin_WT --mutant-id aerolysin_T274S --template-pdb-id 5JZT --mutation T274S --modeling-method FoldX
+```
+
+#### 多点突变 `T232K/K238Q`
+
+```powershell
+python scripts/10_compare_wt_mutant_features.py --wt-feature data/processed/nanopore_features/5JZT_nanopore_structure_features.csv --mutant-feature data/processed/nanopore_features/5JZT_T232K_K238Q_nanopore_structure_features.csv --wt-id aerolysin_WT --mutant-id aerolysin_T232K_K238Q --template-pdb-id 5JZT --mutation T232K/K238Q --modeling-method FoldX
+```
+
+输出在：
+
+```text
+data/processed/delta_features/
+```
+
+## 8. 处理新的单点突变 `T274S` 的完整命令示例
+
+```powershell
+cd E:\nanopore-structure-featurizer
+chcp 65001
+$env:PYTHONPATH="src"
+
+python scripts/07_check_mutation_site.py --config config/default.yaml --mutation T274S
+python scripts/08_prepare_foldx_input.py --config config/default.yaml --mutation T274S --chains A B C D E F G
+```
+
+如果 WT 的 `5JZT_assembly_Repair.pdb` 已经存在且对应的 WT 输入 PDB 没变，可以直接跳过 RepairPDB。
+
+然后继续：
+
+```powershell
+python scripts/09_run_foldx_buildmodel.py --config config/default.yaml --mutation T274S --chains A B C D E F G --prepare-only --overwrite-individual-list
+python scripts/09_run_foldx_buildmodel.py --config config/default.yaml --mutation T274S --chains A B C D E F G
+```
+
+新建 `config/5JZT_T274S_foldx.yaml` 后执行：
+
+```powershell
+python scripts/run_pipeline.py --config config/5JZT_T274S_foldx.yaml
+python scripts/10_compare_wt_mutant_features.py --wt-feature data/processed/nanopore_features/5JZT_nanopore_structure_features.csv --mutant-feature data/processed/nanopore_features/5JZT_T274S_nanopore_structure_features.csv --wt-id aerolysin_WT --mutant-id aerolysin_T274S --template-pdb-id 5JZT --mutation T274S --modeling-method FoldX
+```
+
+## 9. 结果文件说明
+
+### WT / mutant 结构特征
+
+```text
+data/processed/chain_summary/
+data/processed/residue_features/
+data/processed/inner_residues/
+data/processed/nanopore_features/
+```
+
+### 突变位点检查
+
+```text
+data/processed/mutation_sites/
+```
+
+### FoldX 工作目录与模型
+
+```text
+data/foldx/input/
+data/foldx/mutants/
+data/modeled/
+```
+
+### WT-mutant 差异
+
+```text
+data/processed/delta_features/
+```
+
+## 10. 当前方法的边界
+
+当前工程的孔道残基筛选是几何近似版本，核心规则是：
+
+```text
+radial_distance <= inner_radius_threshold
+```
+
+因此：
+
+1. 这里的 `candidate inner residues` 不等于严格定义的 pore-lining residues
+2. 如果你看到某些突变对全局统计影响很小，不一定说明突变没有作用
+3. 多数情况下，还需要进一步做局部位点邻域分析
+
+## 11. 建议的使用习惯
+
+对于每一个新的 mutant，建议固定遵循下面的节奏：
+
+1. 先做位点检查
+2. 再准备 FoldX 输入
+3. 再做 BuildModel
+4. 为 mutant 建一个独立 YAML
+5. 再跑后续特征流程
+6. 最后做 WT-mutant 对比
+
+这样最容易排查问题，也最不容易把不同 mutant 的结果混在一起。

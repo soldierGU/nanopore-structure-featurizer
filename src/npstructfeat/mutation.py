@@ -19,7 +19,7 @@ mutation.py
 
 如果不先做这一步，后续 FoldX 可能会突变错误位置。
 """
-
+import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -503,6 +503,146 @@ def summarize_mutation_site_check(site_df: pd.DataFrame) -> Dict[str, Any]:
         "all_sites_found": site_found_count == total_chains,
         "all_expected_match": expected_match_count == total_chains,
         "all_inner_candidate": inner_candidate_count == total_chains,
+    }
+
+    return summary
+
+def normalize_mutation_label(mutation_id: str) -> str:
+    """
+    将突变字符串转换成适合文件名/目录名的标签。
+
+    示例：
+        T232K        -> T232K
+        T232K/K238Q  -> T232K_K238Q
+        T232K+K238Q  -> T232K_K238Q
+        T232K,K238Q  -> T232K_K238Q
+
+    为什么需要？
+    因为 "/" 在 Windows 和 Linux 中都是路径分隔符，
+    不能直接用于目录名。
+    """
+
+    mutation_id = mutation_id.strip().upper()
+
+    parts = re.split(r"[\/,+;]+", mutation_id)
+    parts = [p.strip() for p in parts if p.strip()]
+
+    return "_".join(parts)
+
+
+def parse_mutation_set(mutation_id: str) -> List[dict]:
+    """
+    解析单点或多点突变字符串。
+
+    支持：
+        T232K
+        K238Q
+        T232K/K238Q
+        T232K+K238Q
+        T232K,K238Q
+
+    返回：
+        [
+            parse_simple_mutation("T232K"),
+            parse_simple_mutation("K238Q")
+        ]
+    """
+
+    mutation_id = mutation_id.strip().upper()
+
+    parts = re.split(r"[\/,+;]+", mutation_id)
+    parts = [p.strip() for p in parts if p.strip()]
+
+    if len(parts) == 0:
+        raise ValueError(f"无法解析突变字符串: {mutation_id}")
+
+    return [parse_simple_mutation(part) for part in parts]
+
+def check_mutation_set_sites(
+    config: Dict[str, Any],
+    mutation_id: str,
+    chains: Optional[List[str]] = None,
+) -> pd.DataFrame:
+    """
+    检查单点或多点突变位点。
+
+    对 T232K/K238Q，会分别检查：
+        T232K
+        K238Q
+
+    输出中每一行对应：
+        一个 mutation_id + 一条链
+    """
+
+    mutation_infos = parse_mutation_set(mutation_id)
+
+    all_dfs = []
+
+    for mutation_info in mutation_infos:
+        single_mutation_id = mutation_info["mutation_id"]
+
+        site_df = check_mutation_site(
+            config=config,
+            mutation_id=single_mutation_id,
+            chains=chains,
+        )
+
+        site_df["mutation_set_id"] = normalize_mutation_label(mutation_id)
+
+        all_dfs.append(site_df)
+
+    return pd.concat(all_dfs, ignore_index=True)
+
+
+def save_mutation_set_site_check(
+    config: Dict[str, Any],
+    mutation_id: str,
+    chains: Optional[List[str]] = None,
+) -> Path:
+    """
+    保存单点或多点突变位点检查结果。
+
+    示例：
+        5JZT_T232K_site_check.csv
+        5JZT_T232K_K238Q_site_check.csv
+    """
+
+    site_df = check_mutation_set_sites(
+        config=config,
+        mutation_id=mutation_id,
+        chains=chains,
+    )
+
+    pdb_id = config["input"]["pdb_id"].upper()
+    mutation_label = normalize_mutation_label(mutation_id)
+
+    output_dir = get_mutation_sites_output_dir(config)
+    output_file = output_dir / f"{pdb_id}_{mutation_label}_site_check.csv"
+
+    site_df.to_csv(output_file, index=False, encoding="utf-8-sig")
+
+    return output_file
+
+
+def summarize_mutation_set_site_check(site_df: pd.DataFrame) -> Dict[str, Any]:
+    """
+    汇总多突变位点检查结果。
+    """
+
+    total_rows = len(site_df)
+
+    site_found_count = int(site_df["is_site_found"].sum())
+    expected_match_count = int(site_df["is_expected_match"].sum())
+    inner_candidate_count = int(site_df["is_inner_candidate"].sum())
+
+    summary = {
+        "total_site_chain_pairs_checked": total_rows,
+        "site_found_count": site_found_count,
+        "expected_match_count": expected_match_count,
+        "inner_candidate_count": inner_candidate_count,
+        "all_sites_found": site_found_count == total_rows,
+        "all_expected_match": expected_match_count == total_rows,
+        "all_inner_candidate": inner_candidate_count == total_rows,
     }
 
     return summary

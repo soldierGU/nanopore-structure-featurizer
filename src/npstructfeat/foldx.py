@@ -29,7 +29,7 @@ from Bio.PDB.Structure import Structure
 from npstructfeat.io import check_input_structure_file, resolve_path
 from npstructfeat.parser import get_selected_model
 from npstructfeat.residue_props import STANDARD_AMINO_ACIDS
-
+from npstructfeat.mutation import normalize_mutation_label, parse_mutation_set
 
 class FoldXProteinSelect(Select):
     """
@@ -368,32 +368,15 @@ def prepare_foldx_input_report(
     mutation_id: str = "T232K",
 ) -> pd.DataFrame:
     """
-    生成 FoldX 输入准备报告。
+    ?? FoldX ???????
 
-    参数
-    ----
-    config : dict
-        YAML 配置字典。
-
-    output_pdb : str | Path
-        导出的 FoldX 输入 PDB 文件。
-
-    mutation_id : str
-        突变 ID。
-        当前默认 T232K。
-
-    返回
-    ----
-    report_df : pandas.DataFrame
-        报告表。
+    ??????????????
+    ???????????????????????????
     """
-
-    from npstructfeat.mutation import parse_simple_mutation
-
-    mutation_info = parse_simple_mutation(mutation_id)
 
     pdb_id = config["input"]["pdb_id"].upper()
     nanopore_id = config["input"].get("nanopore_id", "")
+    mutation_infos = parse_mutation_set(mutation_id)
 
     summary_df = summarize_exported_pdb(
         pdb_file=output_pdb,
@@ -401,27 +384,33 @@ def prepare_foldx_input_report(
         nanopore_id=nanopore_id,
     )
 
-    site_df = check_residue_in_exported_pdb(
-        pdb_file=output_pdb,
-        residue_number=mutation_info["residue_number"],
-        expected_residue=mutation_info["original_aa_3"],
-    )
+    report_frames = []
 
-    # 将链级统计和位点检查合并
-    report_df = summary_df.merge(
-        site_df,
-        on="chain_id",
-        how="left",
-    )
+    for mutation_info in mutation_infos:
+        site_df = check_residue_in_exported_pdb(
+            pdb_file=output_pdb,
+            residue_number=mutation_info["residue_number"],
+            expected_residue=mutation_info["original_aa_3"],
+        )
 
-    report_df["mutation_id"] = mutation_info["mutation_id"]
-    report_df["target_residue"] = mutation_info["target_aa_3"]
-    report_df["output_pdb"] = str(output_pdb)
+        # ??????????????????????????
+        report_df = summary_df.merge(
+            site_df,
+            on="chain_id",
+            how="left",
+        )
+        report_df["mutation_set_id"] = normalize_mutation_label(mutation_id)
+        report_df["mutation_id"] = mutation_info["mutation_id"]
+        report_df["target_residue"] = mutation_info["target_aa_3"]
+        report_df["output_pdb"] = str(output_pdb)
+        report_frames.append(report_df)
 
-    # 调整列顺序
+    report_df = pd.concat(report_frames, ignore_index=True)
+
     columns = [
         "pdb_id",
         "nanopore_id",
+        "mutation_set_id",
         "mutation_id",
         "chain_id",
         "standard_residue_count",
@@ -437,9 +426,7 @@ def prepare_foldx_input_report(
         "output_pdb",
     ]
 
-    report_df = report_df[columns]
-
-    return report_df
+    return report_df[columns]
 
 
 def save_foldx_input_report(
@@ -589,12 +576,13 @@ def get_foldx_mutant_dir(
     """
 
     pdb_id = config["input"]["pdb_id"].upper()
-    mutation_id = mutation_id.strip().upper()
+    mutation_label = normalize_mutation_label(mutation_id)
 
     foldx_config = config.get("foldx", {})
     mutant_root = foldx_config.get("mutant_dir", "data/foldx/mutants")
 
-    mutant_dir = resolve_path(mutant_root) / f"{pdb_id}_{mutation_id}"
+    # 用规范化后的标签命名目录，避免 "/" 之类字符污染路径。
+    mutant_dir = resolve_path(mutant_root) / f"{pdb_id}_{mutation_label}"
     mutant_dir.mkdir(parents=True, exist_ok=True)
 
     return mutant_dir
@@ -628,12 +616,12 @@ def get_modeled_mutant_dir(
     """
 
     pdb_id = config["input"]["pdb_id"].upper()
-    mutation_id = mutation_id.strip().upper()
+    mutation_label = normalize_mutation_label(mutation_id)
 
     foldx_config = config.get("foldx", {})
     modeled_root = foldx_config.get("modeled_dir", "data/modeled")
 
-    modeled_dir = resolve_path(modeled_root) / f"{pdb_id}_{mutation_id}"
+    modeled_dir = resolve_path(modeled_root) / f"{pdb_id}_{mutation_label}"
     modeled_dir.mkdir(parents=True, exist_ok=True)
 
     return modeled_dir
@@ -647,34 +635,18 @@ def write_foldx_individual_list(
     """
     生成 FoldX BuildModel 所需的 individual_list.txt 文件。
 
-    对于 T232K 和 A-G 七条链，会生成：
+    支持单点和多点突变。
 
-        TA232K,TB232K,TC232K,TD232K,TE232K,TF232K,TG232K;
+    示例 1：
+        T232K + A-G
+        -> TA232K,TB232K,TC232K,TD232K,TE232K,TF232K,TG232K;
 
-    参数
-    ----
-    config : dict
-        YAML 配置字典。
-
-    mutation_id : str
-        简单突变 ID，例如 T232K。
-
-    chains : list[str]
-        需要突变的链，例如 ["A", "B", "C", "D", "E", "F", "G"]。
-
-    返回
-    ----
-    Path
-        individual_list.txt 路径。
+    示例 2：
+        T232K/K238Q + A-G
+        -> TA232K,TB232K,...,TG232K,KA238Q,KB238Q,...,KG238Q;
     """
 
-    from npstructfeat.mutation import parse_simple_mutation
-
-    mutation_info = parse_simple_mutation(mutation_id)
-
-    original_aa = mutation_info["original_aa_1"]
-    target_aa = mutation_info["target_aa_1"]
-    residue_number = mutation_info["residue_number"]
+    mutation_infos = parse_mutation_set(mutation_id)
 
     mutant_dir = get_foldx_mutant_dir(
         config=config,
@@ -683,11 +655,16 @@ def write_foldx_individual_list(
 
     mutation_items = []
 
-    for chain_id in chains:
-        chain_id = str(chain_id)
-        mutation_items.append(
-            f"{original_aa}{chain_id}{residue_number}{target_aa}"
-        )
+    for mutation_info in mutation_infos:
+        original_aa = mutation_info["original_aa_1"]
+        target_aa = mutation_info["target_aa_1"]
+        residue_number = mutation_info["residue_number"]
+
+        for chain_id in chains:
+            chain_id = str(chain_id)
+            mutation_items.append(
+                f"{original_aa}{chain_id}{residue_number}{target_aa}"
+            )
 
     mutation_line = ",".join(mutation_items) + ";"
 
@@ -923,7 +900,7 @@ def collect_foldx_mutant_model(
     """
 
     pdb_id = config["input"]["pdb_id"].upper()
-    mutation_id = mutation_id.strip().upper()
+    mutation_label = normalize_mutation_label(mutation_id)
 
     foldx_mutant_pdb = find_foldx_mutant_pdb(
         config=config,
@@ -935,48 +912,30 @@ def collect_foldx_mutant_model(
         mutation_id=mutation_id,
     )
 
-    output_model = modeled_dir / f"{pdb_id}_{mutation_id}_model.pdb"
+    # 输出文件名同样必须使用规范化标签，否则多突变字符串会被当成子路径。
+    output_model = modeled_dir / f"{pdb_id}_{mutation_label}_model.pdb"
 
     shutil.copy2(foldx_mutant_pdb, output_model)
 
     return output_model
 
 
-def validate_mutant_site_in_pdb(
+def validate_mutation_set_in_pdb(
     pdb_file: str | Path,
     mutation_id: str,
     chains: List[str],
 ) -> pd.DataFrame:
     """
-    检查 mutant PDB 中指定突变位点是否已变成目标残基。
+    检查 mutant PDB 中多个突变位点是否全部变成目标残基。
 
-    例如 T232K：
-    检查 A-G 七条链的 residue_number=232 是否为 LYS。
-
-    参数
-    ----
-    pdb_file : str | Path
-        mutant model PDB 文件。
-
-    mutation_id : str
-        突变 ID，例如 T232K。
-
-    chains : list[str]
-        需要检查的链。
-
-    返回
-    ----
-    pd.DataFrame
-        每条链一行的突变验证结果。
+    对 T232K/K238Q，会检查：
+        A-G:232 是否为 LYS
+        A-G:238 是否为 GLN
     """
 
-    from npstructfeat.mutation import parse_simple_mutation
+    mutation_infos = parse_mutation_set(mutation_id)
 
     pdb_file = Path(pdb_file)
-    mutation_info = parse_simple_mutation(mutation_id)
-
-    residue_number = mutation_info["residue_number"]
-    target_residue = mutation_info["target_aa_3"]
 
     parser = PDBParser(QUIET=True)
     structure = parser.get_structure("mutant_model", pdb_file)
@@ -986,58 +945,66 @@ def validate_mutant_site_in_pdb(
 
     rows = []
 
-    for chain_id in chains:
-        chain_id = str(chain_id)
+    for mutation_info in mutation_infos:
+        single_mutation_id = mutation_info["mutation_id"]
+        residue_number = mutation_info["residue_number"]
+        target_residue = mutation_info["target_aa_3"]
 
-        if chain_id not in chain_dict:
-            rows.append(
-                {
-                    "chain_id": chain_id,
-                    "residue_number": residue_number,
-                    "target_residue": target_residue,
-                    "observed_residue": None,
-                    "is_chain_found": False,
-                    "is_site_found": False,
-                    "is_target_match": False,
-                }
-            )
-            continue
+        for chain_id in chains:
+            chain_id = str(chain_id)
 
-        chain = chain_dict[chain_id]
-        hit = None
-
-        for residue in chain:
-            if residue.id[0] != " ":
+            if chain_id not in chain_dict:
+                rows.append(
+                    {
+                        "mutation_id": single_mutation_id,
+                        "chain_id": chain_id,
+                        "residue_number": residue_number,
+                        "target_residue": target_residue,
+                        "observed_residue": None,
+                        "is_chain_found": False,
+                        "is_site_found": False,
+                        "is_target_match": False,
+                    }
+                )
                 continue
-            if residue.id[1] == residue_number:
-                hit = residue
-                break
 
-        if hit is None:
-            rows.append(
-                {
-                    "chain_id": chain_id,
-                    "residue_number": residue_number,
-                    "target_residue": target_residue,
-                    "observed_residue": None,
-                    "is_chain_found": True,
-                    "is_site_found": False,
-                    "is_target_match": False,
-                }
-            )
-        else:
-            observed_residue = hit.resname.strip().upper()
+            chain = chain_dict[chain_id]
+            hit = None
 
-            rows.append(
-                {
-                    "chain_id": chain_id,
-                    "residue_number": residue_number,
-                    "target_residue": target_residue,
-                    "observed_residue": observed_residue,
-                    "is_chain_found": True,
-                    "is_site_found": True,
-                    "is_target_match": observed_residue == target_residue,
-                }
-            )
+            for residue in chain:
+                if residue.id[0] != " ":
+                    continue
+                if residue.id[1] == residue_number:
+                    hit = residue
+                    break
+
+            if hit is None:
+                rows.append(
+                    {
+                        "mutation_id": single_mutation_id,
+                        "chain_id": chain_id,
+                        "residue_number": residue_number,
+                        "target_residue": target_residue,
+                        "observed_residue": None,
+                        "is_chain_found": True,
+                        "is_site_found": False,
+                        "is_target_match": False,
+                    }
+                )
+            else:
+                observed_residue = hit.resname.strip().upper()
+
+                rows.append(
+                    {
+                        "mutation_id": single_mutation_id,
+                        "chain_id": chain_id,
+                        "residue_number": residue_number,
+                        "target_residue": target_residue,
+                        "observed_residue": observed_residue,
+                        "is_chain_found": True,
+                        "is_site_found": True,
+                        "is_target_match": observed_residue == target_residue,
+                    }
+                )
 
     return pd.DataFrame(rows)

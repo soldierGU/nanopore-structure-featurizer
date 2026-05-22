@@ -36,11 +36,11 @@ from npstructfeat.foldx import (
     get_foldx_mutant_dir,
     prepare_foldx_buildmodel_workspace,
     run_foldx_buildmodel,
-    validate_mutant_site_in_pdb,
+    validate_mutation_set_in_pdb,
 )
 from npstructfeat.io import load_config
 from npstructfeat.utils import print_config_summary, require_config_keys
-
+from npstructfeat.mutation import normalize_mutation_label
 
 def parse_args():
     """
@@ -184,7 +184,7 @@ def main():
 
     print("\n验证 mutant 位点是否突变成功...")
 
-    validation_df = validate_mutant_site_in_pdb(
+    validation_df = validate_mutation_set_in_pdb(
         pdb_file=mutant_model,
         mutation_id=mutation_id,
         chains=chains,
@@ -201,7 +201,8 @@ def main():
         mutation_id=mutation_id,
     )
 
-    validation_file = mutant_dir / f"{mutation_id}_mutant_validation.csv"
+    mutation_label = normalize_mutation_label(mutation_id)
+    validation_file = mutant_dir / f"{mutation_label}_mutant_validation.csv"
     validation_df.to_csv(validation_file, index=False, encoding="utf-8-sig")
 
     print(f"\n突变验证表已保存到：{validation_file}")

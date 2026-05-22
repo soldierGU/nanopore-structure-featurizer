@@ -20,6 +20,7 @@ from typing import Any, Dict, Iterable, Optional
 import pandas as pd
 
 from npstructfeat.io import resolve_path
+from npstructfeat.mutation import normalize_mutation_label
 
 
 def read_single_row_feature_table(feature_file: str | Path) -> pd.Series:
@@ -379,9 +380,10 @@ def save_delta_features(
     output_dir = get_delta_features_output_dir()
 
     template_pdb_id = template_pdb_id.upper()
-    mutation_id = mutation_id.upper()
+    mutation_label = normalize_mutation_label(mutation_id)
 
-    output_file = output_dir / f"{template_pdb_id}_WT_vs_{mutation_id}_delta_features.csv"
+    # ?????????????? "/" ????????
+    output_file = output_dir / f"{template_pdb_id}_WT_vs_{mutation_label}_delta_features.csv"
 
     delta_df.to_csv(output_file, index=False, encoding="utf-8-sig")
 

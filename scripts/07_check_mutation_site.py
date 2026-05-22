@@ -29,9 +29,9 @@ import argparse
 
 from npstructfeat.io import load_config
 from npstructfeat.mutation import (
-    check_mutation_site,
-    save_mutation_site_check,
-    summarize_mutation_site_check,
+    check_mutation_set_sites,
+    save_mutation_set_site_check,
+    summarize_mutation_set_site_check,
 )
 from npstructfeat.utils import print_config_summary, require_config_keys
 
@@ -100,13 +100,14 @@ def main():
 
     print(f"\n开始检查突变位点: {mutation_id}")
 
-    site_df = check_mutation_site(
+    site_df = check_mutation_set_sites(
         config=config,
         mutation_id=mutation_id,
     )
 
     print("\n突变位点检查结果：")
     display_cols = [
+        "mutation_id",
         "chain_id",
         "residue_number",
         "expected_residue",
@@ -127,13 +128,13 @@ def main():
         )
     )
 
-    summary = summarize_mutation_site_check(site_df)
+    summary = summarize_mutation_set_site_check(site_df)
 
     print("\n检查统计：")
     for key, value in summary.items():
         print(f"{key}: {value}")
 
-    output_file = save_mutation_site_check(
+    output_file = save_mutation_set_site_check(
         config=config,
         mutation_id=mutation_id,
     )
