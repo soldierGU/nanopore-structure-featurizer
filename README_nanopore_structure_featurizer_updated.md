@@ -775,5 +775,5 @@ T232K feature extraction
         ↓
 WT-mutant delta feature analysis
 ```
-
+test 20260522 on git push
 The current results indicate that, under the current geometric feature definition, T232K mainly changes the charge and hydrophilicity of the candidate pore region while leaving the coarse Cα-based pore geometry unchanged.
