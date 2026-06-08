@@ -1,25 +1,29 @@
 project:
   name: nanopore-structure-featurizer
   version: 0.1.0
+
 input:
-  pdb_id: 5JZT_T232K
-  nanopore_id: aerolysin_T232K
-  structure_file: data/modeled/5JZT_T232K/5JZT_T232K_model.pdb
+  pdb_id: 5JZT_K238Q
+  nanopore_id: aerolysin_K238Q
+  structure_file: data/modeled/5JZT_K238Q/5JZT_K238Q_model.pdb
   file_format: pdb
   assembly_type: modeled_biological_assembly
   structure_source_type: template_based_mutant_model
   template_pdb_id: 5JZT
   modeling_method: FoldX
   mutation_list:
-  - T232K
+    - K238Q
+
 structure:
   use_model_index: 0
   use_standard_residues_only: true
   use_ca_only: true
+
 pore:
   axis_mode: z_axis
   center_mode: xy_mean
   inner_radius_threshold: 20.0
+
 output:
   interim_dir: data/interim
   processed_dir: data/processed
@@ -27,11 +31,13 @@ output:
   residue_feature_dir: data/processed/residue_features
   inner_residue_dir: data/processed/inner_residues
   nanopore_feature_dir: data/processed/nanopore_features
+
 save:
   chain_summary: true
   residue_features: true
   inner_candidate_residues: true
   nanopore_features: true
+
 foldx:
   executable: tools/foldx/foldx_1_20270131.exe
   work_dir: data/foldx
